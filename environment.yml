@@ -15,6 +15,6 @@ dependencies:
   - r-zCompositions
   - bioconductor-phyloseq
   - bioconductor-rhdf5
-  - r-ggpforce
+  - r-ggforce
   - r-cowplot
   - r-rcolorbrewer
