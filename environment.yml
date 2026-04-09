@@ -4,9 +4,11 @@ channels:
   - bioconda
 
 dependencies:
-  - python
+  - python=3.11
   - r-base=4.3
   - r-irkernel
+  - r-rstudio
+  - jupyter-rsession-proxy
   - r-rmarkdown
   - r-knitr
 
