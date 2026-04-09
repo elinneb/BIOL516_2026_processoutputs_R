@@ -4,15 +4,14 @@ channels:
   - bioconda
   - defaults
 dependencies:
-  # --- pin Python to what Binder already uses, helps the solver
   - python=3.10
-  
-  # --- R stack (minimal; no r-essentials)
   - r-base=4.3
   - r-irkernel
-  - bioconductor-phyloseq
-  - bioconductor-biomformat
-  - bioconductor-rhdf5
+  - r-rmarkdown
+  - r-knitr
   - r-ggplot2
   - r-cowplot
   - r-rcolorbrewer
+  - bioconductor-phyloseq
+  - bioconductor-biomformat
+  - bioconductor-rhdf5
