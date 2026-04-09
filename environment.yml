@@ -1,4 +1,4 @@
-name: 596-15_analyses
+name: 516_analyses
 channels:
   - conda-forge
   - bioconda
