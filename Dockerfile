@@ -1,9 +1,10 @@
-FROM rocker/binder:4.3
+FROM rocker/binder:4.5
 
 USER root
 
 RUN install2.r --error \
     BiocManager \
+    remotes \
     tidyverse \
     vegan \
     zCompositions \
@@ -12,8 +13,8 @@ RUN install2.r --error \
     RColorBrewer
 
 RUN R -e "BiocManager::install(c('phyloseq','rhdf5'), ask=FALSE, update=FALSE)"
+RUN R -e "remotes::install_version('microeco', version = '2.0.0', repos = 'https://cloud.r-project.org')"
 
-# copy your repo contents into the RStudio user's home
 COPY . /home/rstudio
 RUN chown -R rstudio:rstudio /home/rstudio
 
