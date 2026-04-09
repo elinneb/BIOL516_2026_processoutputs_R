@@ -1,0 +1,67 @@
+install.packages("tidyverse")
+library(tidyverse)
+
+# set working directory
+setwd("~/2024_data_profiles/")
+
+# Get a list of all .sf files in the directory
+file_list <- list.files("~/2024_data_profiles/",pattern="\\_profile.tsv$")
+
+# Use purrr::map() to read all files into a list of dataframes
+data_list <- map(file_list, ~read.delim(.x, header = TRUE) %>% dplyr::select(taxonomy, coverage))
+
+# Add names from the file list to the data_list of dataframes
+names(data_list) <- file_list
+
+############################################################## Process the data
+# Use purrr::reduce() to join dataframes by shared variable Name
+joined_data <- reduce(data_list, full_join, by = "taxonomy")
+
+# Extract data_list names
+sam_names <- names(data_list)
+
+# Only keep the sam_names text to the left of the second "_"
+sam_names <- str_extract(names(data_list), "^[^_]+_[^_]+")
+
+# Rename coverage columns to data_list names
+names(joined_data)[grep("coverage", names(joined_data))] <- sam_names
+
+# Replace NA with 0 in the entire data frame
+joined_data[is.na(joined_data)] <- 0
+
+# move first column to be last column
+joined_data <- joined_data[c(2:ncol(joined_data), 1)]
+
+# Use separate() to split the column into multiple columns
+joined_data <- separate(joined_data, taxonomy, into = paste("Column", 1:8, sep = "_"), sep = "; ")
+
+# Rename the last 8 columns
+names(joined_data)[(ncol(joined_data)-7):ncol(joined_data)] <- new_column_names <- c("Root", "Domain", "Phylum", "Class", "Order", "Family", "Genus", "Species")
+
+# Replace NA in 'Phylum' column with "p__"
+joined_data$Phylum[is.na(joined_data$Phylum)] <- "p__unclassified"
+# Replace NA in 'Class' column with "c__"
+joined_data$Class[is.na(joined_data$Class)] <- "c__unclassified"
+# Replace NA in 'Order' column with "o__"
+joined_data$Order[is.na(joined_data$Order)] <- "o__unclassified"
+# Replace NA in 'Family' column with "f__"
+joined_data$Family[is.na(joined_data$Family)] <- "f__unclassified"
+# Replace NA in 'Genus' column with "g__"
+joined_data$Genus[is.na(joined_data$Genus)] <- "g__unclassified"
+# Replace NA in 'Species' column with "s__"
+joined_data$Species[is.na(joined_data$Species)] <- "s__unclassified"
+
+
+
+# For Phylum-level Agglom
+phylum <- joined_data %>% group_by(Root, Domain, Phylum) %>% summarise(across(1:39, sum, na.rm = TRUE)) %>% ungroup()
+
+# Write table for Phylum coverages
+write.table(phylum, "~/Phylum_SingleM.tsv", row.names = FALSE, quote = F, sep="\t")
+
+
+# For Class-level Agglom
+class <- joined_data %>% group_by(Root, Domain, Phylum, Class) %>% summarise(across(1:39, sum, na.rm = TRUE)) %>% ungroup()
+
+# Write table for Class coverages
+write.table(class, "~/Class_SingleM.tsv", row.names = FALSE, quote = F, sep="\t")
