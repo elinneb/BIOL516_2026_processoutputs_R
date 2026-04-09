@@ -2,36 +2,28 @@ name: 516_analyses
 channels:
   - conda-forge
   - bioconda
-  - defaults
 
 dependencies:
-  - python=3.10
-
-  # --- R base + essentials
+  - python
   - r-base=4.3
   - r-irkernel
   - r-rmarkdown
   - r-knitr
 
-  # --- tidyverse ecosystem
+  # core R packages
   - r-tidyverse
   - r-stringr
   - r-scales
-  - r-ggplot2
-  - r-ggforce
-  - r-cowplot
-  - r-gridextra
   - r-rcolorbrewer
   - r-pheatmap
-
-  # --- ecology / stats
+  - r-gridextra
+  - r-cowplot
+  - r-ggforce
   - r-vegan
+  - r-zcompositions
 
-  # --- Bioconductor
+  # bioconductor / microbiome stack
   - bioconductor-phyloseq
   - bioconductor-biomformat
   - bioconductor-rhdf5
-
-  # --- packages available on conda-forge
-  - r-zcompositions
-  - r-microbiome
+  - bioconductor-microbiome
