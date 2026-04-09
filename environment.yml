@@ -18,3 +18,5 @@ dependencies:
   - r-ggforce
   - r-cowplot
   - r-rcolorbrewer
+  - rstudio
+  - jupyter-rsession-proxy
