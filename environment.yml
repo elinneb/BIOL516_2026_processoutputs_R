@@ -1,25 +1,20 @@
-name: 516_analyses
+name: BIOL516 SingleM Analyses
 channels:
   - conda-forge
   - bioconda
-
+channel_priority: strict
 dependencies:
-  - python=3.11
+  # --- pin Python to what Binder already uses, helps the solver
+  - python=3.10
+
+  # --- R stack (minimal; no r-essentials)
   - r-base=4.3
   - r-irkernel
-  - r-rstudio
-  - jupyter-rsession-proxy
-  - r-rmarkdown
-  - r-knitr
-
   - r-tidyverse
-  - r-scales
-  - r-rcolorbrewer
-  - r-cowplot
-  - r-ggforce
   - r-vegan
-  - r-zcompositions
-  - r-rmdformats
-  - r-aplot
-
+  - r-zCompositions
   - bioconductor-phyloseq
+  - bioconductor-rhdf5
+  - r-ggpforce
+  - r-cowplot
+  - r-rcolorbrewer
