@@ -8,8 +8,9 @@ RUN install2.r --error \
     zCompositions \
     ggforce \
     cowplot \
-    RColorBrewer \
-    phyloseq \
-    rhdf5
+    RColorBrewer
+
+RUN R -e "install.packages('BiocManager', repos='https://cloud.r-project.org')" && \
+    R -e "BiocManager::install(c('phyloseq','rhdf5'), ask=FALSE, update=FALSE)"
 
 USER rstudio
