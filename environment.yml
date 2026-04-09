@@ -3,15 +3,35 @@ channels:
   - conda-forge
   - bioconda
   - defaults
+
 dependencies:
   - python=3.10
+
+  # --- R base + essentials
   - r-base=4.3
   - r-irkernel
   - r-rmarkdown
   - r-knitr
+
+  # --- tidyverse ecosystem
+  - r-tidyverse
+  - r-stringr
+  - r-scales
   - r-ggplot2
+  - r-ggforce
   - r-cowplot
+  - r-gridextra
   - r-rcolorbrewer
+  - r-pheatmap
+
+  # --- ecology / stats
+  - r-vegan
+
+  # --- Bioconductor
   - bioconductor-phyloseq
   - bioconductor-biomformat
   - bioconductor-rhdf5
+
+  # --- packages available on conda-forge
+  - r-zcompositions
+  - r-microbiome
