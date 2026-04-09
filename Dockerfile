@@ -1,4 +1,4 @@
-FROM rocker/binder:4.5
+FROM rocker/binder:4.4.2
 
 USER root
 
