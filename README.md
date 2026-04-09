@@ -1,2 +1,2 @@
-# 596-15-process-SingleM-output_R
-[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/elinneb/596-15_S2024_processSingleMoutput_R/HEAD)
+# 516-process-SingleM-PFAS-output_R
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/elinneb/BIOL516_2026_processoutputs_R/tree/main/HEAD)
