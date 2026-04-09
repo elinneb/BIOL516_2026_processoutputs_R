@@ -8,7 +8,7 @@ dependencies:
   - python=3.10
 
   # --- R stack (minimal; no r-essentials)
-  - r-base=4.3
+  - r-base=4.3-2024-01-01
   - r-irkernel
   - r-tidyverse
   - r-vegan
