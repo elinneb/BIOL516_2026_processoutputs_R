@@ -12,6 +12,8 @@ dependencies:
   - r-irkernel
   - r-essentials
   - r-tidyverse
+  - rstudio-desktop
+  - jupyter-rsession-proxy
   - r-vegan
   - r-zCompositions
   - bioconductor-phyloseq
