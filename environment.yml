@@ -10,6 +10,8 @@ dependencies:
   # --- R stack (minimal; no r-essentials)
   - r-base=4.3
   - r-irkernel
+  - r-essentials
+  - rstudio notebook
   - r-tidyverse
   - r-vegan
   - r-zCompositions
@@ -18,5 +20,3 @@ dependencies:
   - r-ggforce
   - r-cowplot
   - r-rcolorbrewer
-  - rstudio
-  - jupyter-rsession-proxy
