@@ -26,7 +26,6 @@ library(ggforce)
 library(microeco)
 library(file2meco)
 library(cowplot)
-library(ggrepel)
 
 ```
 
