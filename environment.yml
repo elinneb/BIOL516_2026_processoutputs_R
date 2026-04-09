@@ -10,20 +10,14 @@ dependencies:
   - r-rmarkdown
   - r-knitr
 
-  # core R packages
   - r-tidyverse
-  - r-stringr
   - r-scales
   - r-rcolorbrewer
-  - r-pheatmap
-  - r-gridextra
   - r-cowplot
   - r-ggforce
   - r-vegan
   - r-zcompositions
+  - r-rmdformats
+  - r-aplot
 
-  # bioconductor / microbiome stack
   - bioconductor-phyloseq
-  - bioconductor-biomformat
-  - bioconductor-rhdf5
-  - bioconductor-microbiome
