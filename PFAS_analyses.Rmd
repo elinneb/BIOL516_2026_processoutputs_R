@@ -1,0 +1,337 @@
+---
+title: "PFAS Analysis"
+author: "Elinne Becket"
+output: rmdformats::readthedown
+---
+
+## =========================================================
+## PFAS sediment metagenome analysis
+## Input:
+##   1) PFAS_reads_per_kb_ref_spike_scaled_per_mg_matrix.tsv
+##   2) MB_sediment_metadata.txt
+## =========================================================
+
+# Loading Required Libraries 
+```{r, warning=FALSE, message=FALSE}
+
+# Load the packages we need
+library(tidyverse)
+library(vegan)
+library(pheatmap)
+library(RColorBrewer)
+library(broom)
+
+```
+
+## -------------------------
+## File paths
+## -------------------------
+```{r}
+
+pfas_file <- "PFAS_reads_per_kb_ref_spike_scaled_per_mg_matrix.tsv"
+meta_file <- "MB_sediment_metadata.txt"
+
+outdir <- "PFAS_R_analysis"
+dir.create(outdir, showWarnings = FALSE)
+
+```
+
+## -------------------------
+## Read PFAS matrix
+## Rows = references
+## Cols = samples
+## -------------------------
+```{r}
+
+# Read PFAS abundance matrix (genes x samples)
+pfas_mat_df <- read.delim(pfas_file, check.names = FALSE)
+
+# Check that first column contains gene IDs
+stopifnot(colnames(pfas_mat_df)[1] == "reference")
+
+# Convert to matrix with genes as rows
+pfas_mat <- pfas_mat_df |>
+  column_to_rownames("reference") |>
+  as.matrix()
+
+# Transpose so rows = samples, columns = genes (needed for most analyses)
+pfas_sample_gene <- t(pfas_mat)
+
+# Ensure values are numeric
+mode(pfas_sample_gene) <- "numeric"
+
+# Store sample IDs
+sample_ids <- rownames(pfas_sample_gene)
+
+```
+
+
+## -------------------------
+## Read metadata + reshaping
+## -------------------------
+
+```{r}
+# Read metadata and create sample IDs that match PFAS matrix
+meta2 <- read.delim(meta_file, check.names = FALSE) |>
+  mutate(
+    Month_Code = sprintf("%02d", as.integer(Month_Code)),
+    sample_id = paste(if_else(Month_Code == "01", "26", "25"), Month_Code, Site_Code, sep = "_"),
+    Month = factor(Month, levels = c("October", "November", "December", "January"))
+  ) |>
+  filter(sample_id %in% sample_ids) |>
+  slice(match(sample_ids, sample_id))
+
+# Check sample order matches PFAS matrix
+stopifnot(all(meta2$sample_id == rownames(pfas_sample_gene)))
+
+# Convert PFAS matrix to long format for plotting
+long_df <- as.data.frame(pfas_sample_gene) |>
+  tibble::rownames_to_column("sample_id") |>
+  tidyr::pivot_longer(-sample_id, names_to = "reference", values_to = "abundance") |>
+  left_join(meta2, by = "sample_id")
+
+```
+
+## -------------------------
+## Site ordering
+## -------------------------
+```{r}
+# Set consistent site order for all plots
+site_order <- c(
+  "Mission Point", "Fanuel St Park", "Paradise Point", "Fiesta Sunset Beach",
+  "De Anza Cove", "South Shores", "Leisure Lagoon", "Tecolote Creek"
+)
+
+long_df$Site <- factor(long_df$Site, levels = site_order)
+meta2$Site <- factor(meta2$Site, levels = site_order)
+
+```
+
+
+## -------------------------
+## Add summary columns and transform data for plotting
+## -------------------------
+
+```{r}
+# Calculate total PFAS signal per sample and per gene
+sample_sums <- rowSums(pfas_sample_gene, na.rm = TRUE)
+gene_sums   <- colSums(pfas_sample_gene, na.rm = TRUE)
+
+# Add summary metrics to metadata
+alpha_df <- meta2 |>
+  mutate(
+    total_PFAS_abundance = sample_sums,
+    richness_detected = rowSums(pfas_sample_gene > 0, na.rm = TRUE),
+    shannon = vegan::diversity(pfas_sample_gene, index = "shannon")
+  )
+
+# Log-transform data to reduce influence of large values
+pseudo <- min(pfas_sample_gene[pfas_sample_gene > 0], na.rm = TRUE) / 2
+pfas_log <- log10(pfas_sample_gene + pseudo)
+```
+
+
+### Analyses
+
+
+## -------------------------
+## 1) Boxplots
+## -------------------------
+
+```{r,warning = FALSE,message=FALSE,fig.width= 15, fig.height=8}
+
+# Sum all PFAS genes within each sample
+sample_totals <- long_df |>
+  group_by(sample_id, Site) |>
+  summarise(total_abundance = sum(abundance, na.rm = TRUE), .groups = "drop")
+
+# Plot total PFAS abundance across sites
+p_box_total <- ggplot(sample_totals, aes(x = Site, y = total_abundance, fill = Site)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width = 0.15, size = 2, alpha = 0.8) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(
+    title = "Total PFAS Gene Abundance by Site",
+    x = "Site",
+    y = "PFAS abundance (spike-scaled per mg sediment)"
+  )
+
+# Save and show the plot
+ggsave("plots/Total PFAS Gene Abundance by Site.pdf", p_box_total, width = 8, height = 8, limitsize = FALSE)
+p_box_total
+
+# Plot abundance of each PFAS gene across sites
+p_gene_box <- ggplot(long_df, aes(x = Site, y = abundance)) +
+  geom_boxplot(outlier.shape = NA, fill = "grey80") +
+  geom_jitter(width = 0.15, size = 1, alpha = 0.6) +
+  facet_wrap(~ reference, scales = "free_y") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(
+    title = "PFAS Gene Abundance by Site (All Genes)",
+    x = "Site",
+    y = "PFAS abundance (spike-scaled per mg sediment)"
+  )
+
+# Save and show the faceted gene plot
+ggsave("plots/PFAS Gene Abundance by Site.pdf", p_gene_box, width = 18, height = 12, limitsize = FALSE)
+p_gene_box
+
+
+```
+
+## -------------------------
+## 2) Top genes heatmap
+## -------------------------
+
+```{r, fig.width= 10, fig.height=10}
+
+# Select the top 20 most abundant PFAS genes
+top_n <- 20
+top_genes <- names(sort(gene_sums, decreasing = TRUE))[1:min(top_n, ncol(pfas_log))]
+
+# Add sample metadata for the heatmap columns
+ann_col <- meta2 |>
+  select(sample_id, Month, Site) |>
+  column_to_rownames("sample_id")
+
+# Subset to top genes and transpose so genes are rows
+heat_mat <- t(pfas_log[, top_genes, drop = FALSE])
+
+# Plot heatmap of relative abundance patterns
+hm <- pheatmap(
+  heat_mat,
+  annotation_col = ann_col,
+  scale = "row",
+  clustering_distance_cols = "euclidean",
+  clustering_method = "complete",
+  fontsize_row = 8,
+  fontsize_col = 9,
+  border_color = NA,
+  color = colorRampPalette(c("#2c7bb6", "white", "#d7191c"))(100),
+  breaks = seq(-3, 3, length.out = 101)
+)
+
+# Save the heatmap
+ggsave("plots/PFAS Gene Heatmap by Site and Month.pdf", hm, width = 10, height = 12, limitsize = FALSE)
+
+
+```
+
+
+## -------------------------
+## 6) Correlation of total PFAS abundance with chemistry
+## -------------------------
+```{r}
+
+# Environmental variables to test against total PFAS abundance
+corr_vars <- c("Density", "pH", "sH2O", "Nperc", "Cperc", "C:N_ratio", "TC", "TN", "SOM",
+               "NH4_mgkg", "NO3_mgkg", "DIN_mgkg", "PO4_mgkg")
+
+# Run Spearman correlations for each variable
+corr_results <- map_dfr(corr_vars, function(v) {
+  x <- alpha_df[[v]]
+  y <- alpha_df$total_PFAS_abundance
+  ct <- suppressWarnings(cor.test(x, y, method = "spearman"))
+  tibble(
+    variable = v,
+    rho = unname(ct$estimate),
+    p_value = ct$p.value
+  )
+}) |>
+  mutate(p_adj = p.adjust(p_value, method = "BH")) |>
+  arrange(p_adj, p_value)
+
+# Format results for plotting
+corr_plot_df <- corr_results |>
+  mutate(
+    variable = factor(variable, levels = rev(variable)),
+    sig = if_else(p_adj < 0.05, "FDR < 0.05", "ns"),
+    direction = if_else(rho > 0, "Positive", "Negative")
+  )
+
+# Plot correlation strength for each variable
+p_corr <- ggplot(corr_plot_df, aes(x = rho, y = variable, color = sig, shape = direction)) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey60") +
+  geom_point(size = 3) +
+  theme_bw() +
+  labs(
+    title = "Correlation of Total PFAS Abundance with Sediment Chemistry",
+    x = "Spearman rho",
+    y = "Environmental variable",
+    color = NULL
+  )
+
+# Save and show the plot
+ggsave("plots/Correlation of Total PFAS Abundance with Sediment Chemistry.pdf", p_corr, width = 8, height = 4, limitsize = FALSE)
+p_corr
+
+```
+
+
+## -------------------------
+## 7) Gene-wise associations with metadata
+## Spearman against selected variables
+## -------------------------
+```{r}
+
+# Environmental variables to test against each PFAS gene
+selected_vars <- c("Density", "pH", "sH2O", "Nperc", "Cperc", "C:N_ratio", "TC", "TN", "SOM",
+               "NH4_mgkg", "NO3_mgkg", "DIN_mgkg", "PO4_mgkg")
+
+# Run Spearman correlations for each gene-variable pair
+gene_cor_results <- map_dfr(colnames(pfas_sample_gene), function(g) {
+  y <- pfas_sample_gene[, g]
+
+  map_dfr(selected_vars, function(v) {
+    x <- meta2[[v]]
+    ct <- suppressWarnings(cor.test(x, y, method = "spearman"))
+    tibble(
+      reference = g,
+      variable = v,
+      rho = unname(ct$estimate),
+      p_value = ct$p.value
+    )
+  })
+}) |>
+  mutate(p_adj = p.adjust(p_value, method = "BH")) |>
+  arrange(p_adj, p_value)
+
+# Convert correlation results into a matrix for plotting
+gene_cor_mat <- gene_cor_results |>
+  select(reference, variable, rho) |>
+  pivot_wider(names_from = variable, values_from = rho) |>
+  column_to_rownames("reference") |>
+  as.matrix()
+
+# Mark significant correlations with an asterisk
+sig_mat <- gene_cor_results |>
+  mutate(sig = if_else(p_adj < 0.05, "*", "")) |>
+  select(reference, variable, sig) |>
+  pivot_wider(names_from = variable, values_from = sig) |>
+  column_to_rownames("reference") |>
+  as.matrix()
+
+# Plot heatmap of gene-environment correlations
+hm_cor <- pheatmap(
+  gene_cor_mat,
+  color = colorRampPalette(c("#2c7bb6", "white", "#d7191c"))(100),
+  breaks = seq(-1, 1, length.out = 101),
+  border_color = NA,
+  fontsize_row = 7,
+  fontsize_col = 10,
+  display_numbers = sig_mat,
+  number_color = "black",
+  main = "Spearman Correlation of PFAS Genes with Environmental Variables"
+)
+
+# Save the heatmap
+ggsave("plots/Spearman Correlation of PFAS Genes with Environmental Variables.pdf", hm_cor, width = 8, height = 6, limitsize = FALSE)
+
+
+```
+
+
+
+

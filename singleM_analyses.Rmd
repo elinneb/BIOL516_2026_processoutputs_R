@@ -1,0 +1,335 @@
+---
+title: "Microbial Community Analysis with SingleM"
+author: "Elinne Becket"
+output: rmdformats::readthedown
+---
+
+# Loading Required Libraries 
+```{r, warning=FALSE, message=FALSE}
+
+# Load packages used for data wrangling, diversity analysis, and plotting
+library(tidyverse)
+library(phyloseq)
+library(vegan)
+library(zCompositions)
+library(ggforce)
+library(microeco)
+library(file2meco)
+library(cowplot)
+
+```
+
+## Load and combine SingleM output files
+```{r}
+
+# Folder containing SingleM profile files
+data_dir <- "singlem_output"
+
+# Find all SingleM profile files in the folder
+file_list <- list.files(
+  path = data_dir,
+  pattern = "_profile\\.tsv$",
+  full.names = TRUE
+)
+
+# Extract sample IDs from file names
+sample_names <- basename(file_list) %>%
+  stringr::str_extract("[0-9]{2}_[0-9]{2}_[A-Z]{3}")
+
+# Read each file and rename the coverage column to the sample ID
+data_list <- purrr::map2(
+  file_list,
+  sample_names,
+  ~ read.delim(.x, header = TRUE) %>%
+      dplyr::select(taxonomy, coverage) %>%
+      dplyr::rename(!!.y := coverage)
+)
+
+# Join all samples into one table by taxonomy
+joined_data <- purrr::reduce(data_list, dplyr::full_join, by = "taxonomy")
+
+# Replace missing values with 0
+joined_data[is.na(joined_data)] <- 0
+
+```
+
+## Split taxonomy into levels
+```{r}
+
+# Taxonomic levels to separate from the taxonomy string
+taxonomy_levels <- c("Root", "Domain", "Phylum", "Class", "Order", "Family", "Genus", "Species")
+
+# Fix any missing or blank column names
+names(joined_data)[is.na(names(joined_data)) | names(joined_data) == ""] <- "unknown"
+
+# Split the taxonomy string into separate columns
+joined_data <- joined_data %>%
+  separate(
+    taxonomy,
+    into = taxonomy_levels,
+    sep = "; ",
+    fill = "right",
+    remove = TRUE
+  ) %>%
+  mutate(
+    Phylum  = replace_na(Phylum,  "p__unclassified"),
+    Class   = replace_na(Class,   "c__unclassified"),
+    Order   = replace_na(Order,   "o__unclassified"),
+    Family  = replace_na(Family,  "f__unclassified"),
+    Genus   = replace_na(Genus,   "g__unclassified"),
+    Species = replace_na(Species, "s__unclassified")
+  )
+
+# Save combined taxonomy table
+save(joined_data, file = "Singlem_df.RData")
+
+# Uncomment next line if needed to reload in singlem RDdata file
+# load("Singlem_df.RData")
+
+
+```
+
+
+## Create Phyloseq Object
+```{r}
+
+# Split into abundance table and taxonomy table
+taxonomy_cols <- c("Root", "Domain", "Phylum", "Class", "Order", "Family", "Genus", "Species")
+
+abundance_data <- joined_data[, !(names(joined_data) %in% taxonomy_cols)]
+taxonomy_data  <- joined_data[, taxonomy_cols]
+
+# Read metadata table
+samdf <- read.delim("MB_sediment_metadata.txt", sep = "\t", header = TRUE, stringsAsFactors = FALSE, colClasses = "character")
+
+
+# Match metadata to the sample order in abundance table
+rownames(samdf) <- colnames(abundance_data)
+
+# Build a phyloseq object
+ps <- phyloseq(
+  otu_table(as.matrix(abundance_data), taxa_are_rows = TRUE),
+  tax_table(as.matrix(taxonomy_data)),
+  sample_data(samdf)
+)
+
+```
+
+
+## Create Microtable object (microeco)
+```{r}
+
+# Convert phyloseq object to microeco format
+meco_dataset <- phyloseq2meco(ps)
+
+# Save objects for later use
+save(samdf, ps, meco_dataset, file = "MB_microeco.RData")
+
+# Uncomment next line if needed to reload in singlem RDdata file
+# load("MB_microeco.RData")
+
+```
+
+### Taxanomic Analysis
+
+## Compositional Bar Chart
+```{r,warning = FALSE,message=FALSE,fig.width= 15, fig.height=8}
+
+# Create class-level abundance table
+t2 <- trans_abund$new(dataset = meco_dataset, taxrank = "Class", ntaxa = 40)
+t2$data_abund$Site <- factor(t2$data_abund$Site, levels = c("Mission Point","Fanuel St Park", "Paradise Point", "Fiesta Sunset Beach", "De Anza Cove", "South Shores", "Leisure Lagoon", "Tecolote Creek"))
+t2$data_abund$Month <- factor(t2$data_abund$Month, levels = c("October", "November", "December", "January"))
+
+# Create order-level abundance table
+t3 <- trans_abund$new(dataset = meco_dataset, taxrank = "Order", ntaxa = 50)
+t3$data_abund$Site <- factor(t3$data_abund$Site, levels = c("Mission Point","Fanuel St Park", "Paradise Point", "Fiesta Sunset Beach", "De Anza Cove", "South Shores", "Leisure Lagoon", "Tecolote Creek"))
+t3$data_abund$Month <- factor(t3$data_abund$Month, levels = c("October", "November", "December", "January"))
+
+# Plot class-level composition by site
+g2s <- t2$plot_bar(bar_full = TRUE, others_color = "grey70", facet = c("Site"), legend_text_italic = FALSE, clustering = FALSE, x_axis_name = NULL, color_values = RColorBrewer::brewer.pal(10, "Paired")) + theme_classic() + theme(text = element_text(size = 14), axis.text = element_text(size = 14), axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) + guides(fill = guide_legend(ncol = 2,title = "Class"))
+g2s
+
+# Plot order-level composition by site
+g3s <- t3$plot_bar(bar_full = TRUE, others_color = "grey70", facet = c("Site"), legend_text_italic = FALSE, clustering = FALSE, x_axis_name = NULL, color_values = RColorBrewer::brewer.pal(10, "Paired")) + theme_classic() + theme(text = element_text(size = 14), axis.text = element_text(size = 14), axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) + guides(fill = guide_legend(ncol = 2,title = "Order"))
+g3s
+
+
+# Combine both composition plots into one figure and save
+plot_grid(g2s, g3s, ncol = 1, align = 'v', labels = "AUTO")
+ggsave("plots/MB_taxa_composition_barplot_Order_SiteandMonth.pdf", width = 18, height = 18, limitsize = FALSE)
+
+```
+
+## Species: Alpha Diversity
+```{r, fig.width= 10, fig.height=10}
+
+# Set plotting order for month and site
+ps@sam_data$Month <- factor(ps@sam_data$Month, levels = c("October", "November", "December", "January"))
+ps@sam_data$Site <- factor(ps@sam_data$Site, levels = c("Mission Point","Fanuel St Park", "Paradise Point", "Fiesta Sunset Beach", "De Anza Cove", "South Shores", "Leisure Lagoon", "Tecolote Creek"))
+
+# Plot alpha diversity by month
+pmonth <- plot_richness(ps, x = "Month", measures = c("Shannon", "InvSimpson"))
+pmonth$layers <- list()
+pmonth <- pmonth +
+  geom_boxplot(aes(x = Month, y = value), outlier.shape = NA, fill = "white", color = "black") +
+  geom_jitter(aes(x = Month, y = value, color = Site), width = 0.02, alpha = 0.7, size = 2) +
+  scale_color_viridis_d(option = "H") +
+  guides(color = guide_legend(override.aes = list(size = 3, alpha = 1))) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+pmonth
+
+# Plot alpha diversity by site
+psite <- plot_richness(ps, x = "Site", measures = c("Shannon", "InvSimpson"))
+psite$layers <- list()
+psite <- psite +
+  geom_boxplot(aes(x = Site, y = value), outlier.shape = NA, fill = "white", color = "black") +
+  geom_jitter(aes(x = Site, y = value, color = Month), width = 0.02, alpha = 0.7, size = 2) +
+  scale_color_viridis_d(option = "H") +
+  guides(color = guide_legend(override.aes = list(size = 3, alpha = 1))) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+psite
+
+# Combine the two alpha diversity plots and save
+plot_grid(pmonth, psite, ncol = 1, align = 'v', labels = "AUTO")
+ggsave("plots/MB_taxa_alpha_SiteandMonth.pdf", width = 10, height = 10, limitsize = FALSE)
+
+
+```
+
+
+## Beta diversity Preprocessing - Species
+```{r, message=FALSE, warning=FALSE, results='hide'}
+
+# Extract OTU table from phyloseq object
+otu <- as(otu_table(ps), "matrix")
+
+# Transpose so rows = samples and columns = taxa
+if (taxa_are_rows(ps)) {
+  otu <- t(otu)
+}
+
+# Remove taxa that are absent in all samples
+otu <- otu[, colSums(otu > 0, na.rm = TRUE) > 0, drop = FALSE]
+
+# Keep taxa detected in at least 3 samples
+otu <- otu[, colSums(otu > 0, na.rm = TRUE) >= 3, drop = FALSE]
+
+# Replace zeros before CLR transformation
+otu_z <- cmultRepl(
+  otu,
+  method = "GBM",
+  output = "p-counts"
+)
+
+# Apply CLR transformation sample by sample
+clr_mat <- t(apply(otu_z, 1, function(x) log(x) - mean(log(x))))
+
+## Aitchison distance for downstream beta-diversity stats
+aitch_dist <- dist(clr_mat, method = "euclidean")
+
+# Run PCA on CLR-transformed data
+pca <- prcomp(clr_mat, center = FALSE, scale. = FALSE)
+
+# Calculate variance explained by the first two axes
+var_explained <- pca$sdev^2 / sum(pca$sdev^2)
+pc1 <- round(var_explained[1] * 100, 1)
+pc2 <- round(var_explained[2] * 100, 1)
+
+# Extract PCA scores
+ord_scores <- as.data.frame(pca$x[, 1:2])
+colnames(ord_scores) <- c("Axis1", "Axis2")
+ord_scores$Sample <- rownames(ord_scores)
+
+# Add sample metadata to the PCA scores
+samdf <- data.frame(sample_data(ps))
+samdf$Sample <- rownames(samdf)
+
+ord_scores <- merge(ord_scores, samdf[, c("Sample", "Month", "Site")], by = "Sample")
+
+
+```
+
+
+
+## Plot Beta
+```{r, fig.width= 8, fig.height=8}
+
+# Set site order for beta-diversity plots
+ord_scores$Site <- factor(ord_scores$Site, levels = c("Mission Point", "Fanuel St Park", "Paradise Point", "Fiesta Sunset Beach", "De Anza Cove", "South Shores", "Leisure Lagoon", "Tecolote Creek"))
+
+# Plot beta diversity grouped by site
+beta_plot_site <- ggplot(data = ord_scores) +
+  ggtitle("Beta-diversity by Site") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  geom_mark_ellipse(
+    aes(x = Axis1, y = Axis2, fill = Site, color = Site),
+    expand = unit(0.5, "mm")
+  ) +
+  geom_point(aes(x = Axis1, y = Axis2, shape = Month), size = 2) +
+  scale_shape_manual(values = c(0, 1, 2, 3, 4, 5, 6, 7, 8, 15, 16, 17)) +
+  labs(
+    x = paste0("PC1 (", pc1, "%)"),
+    y = paste0("PC2 (", pc2, "%)"),
+    fill = "Site",
+    shape = "Month",
+    color = "Site"
+  )
+
+# Save and show the plot
+ggsave("plots/MB_taxa_beta_bySite.pdf", plot = beta_plot_site, width = 8, height = 6, limitsize = FALSE)
+beta_plot_site
+
+# Plot beta diversity grouped by month
+beta_plot_month <- ggplot(data = ord_scores) +
+  ggtitle("Beta-diversity by Month") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  geom_mark_ellipse(
+    aes(x = Axis1, y = Axis2, fill = Month, color = Month),
+    expand = unit(0.5, "mm")
+  ) +
+  geom_point(aes(x = Axis1, y = Axis2, shape = Site), size = 2) +
+  scale_shape_manual(values = c(0, 1, 2, 3, 4, 5, 6, 7)) +
+  labs(
+    x = paste0("PC1 (", pc1, "%)"),
+    y = paste0("PC2 (", pc2, "%)"),
+    fill = "Month",
+    shape = "Site",
+    color = "Month"
+  )
+
+# Save and show the plot
+ggsave("plots/MB_taxa_beta_byMonth.pdf", plot = beta_plot_month, width = 8, height = 6, limitsize = FALSE)
+beta_plot_month
+
+
+
+```
+
+
+## Beta Stats (Anosim + PERMANOVA + Betadisper)
+```{r}
+
+# Test whether community composition differs by site
+perm_site  <- adonis2(aitch_dist ~ Site, data = samdf)
+perm_site
+
+# Test whether community composition differs by month
+perm_month <- adonis2(aitch_dist ~ Month, data = samdf)
+perm_month
+
+# Test whether dispersion differs among sites
+bd_site <- betadisper(aitch_dist, samdf$Site)
+bd_site_anova <- anova(bd_site)
+bd_site_anova
+
+# Test whether dispersion differs among months
+bd_month <- betadisper(aitch_dist, samdf$Month)
+bd_month_anova <- anova(bd_month)
+bd_month_anova
+
+
+```
+
+
