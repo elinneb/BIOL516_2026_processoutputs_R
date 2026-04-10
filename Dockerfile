@@ -12,7 +12,8 @@ RUN install2.r --error \
     cowplot \
     RColorBrewer \
     broom \
-    pheatmap
+    pheatmap \
+    rmdformats
 
 RUN R -e "BiocManager::install(c('phyloseq','rhdf5'), ask = FALSE, update = FALSE)"
 
